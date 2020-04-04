@@ -4,9 +4,14 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
-const md5 = require('md5');
 
+//usin moongoose ecryption to encrypt passwords
+const encrypt = require('mongoose-encryption');
+//using md5 hash to encrypt password
+const md5 = require('md5');
+//using bcrypt to hash and salt password
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const port = 3000;
 
@@ -19,7 +24,7 @@ app.use(bodyParser.urlencoded({
 }));
 
 
-// ========================================== Encryption ========================================================//
+// ========================================== Encryption using mongoose-encrypt ========================================================//
 // Add any other plugins or middleware here. For example, middleware for hashing passwords
 const encKey = process.env.SECRET_32BYTE_BASE64_STRING;
 const sigKey = process.env.SECRET_64BYTE_BASE64_STRING;
@@ -51,7 +56,6 @@ const userSchema = new mongoose.Schema({
 
 
 //create user model
-
 const User = mongoose.model('User', userSchema);
 
 
@@ -72,23 +76,36 @@ app.route('/register')
   })
 
   .post((req, res) => {
-    //create new user document
-    const newUser = new User({
-      email: req.body.username,
-      password: md5(req.body.password)
-    });
-    // save document to database
-    newUser.save((err) => {
-      //check if error log this error
-      if (err) {
-        console.log(err);
-        //else render secret page
-      } else {
-        res.render('secrets');
+
+    //generate and save passwords using hash and salt
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+      // Store hash in your password DB.
+      if (!err) {
+        //create new user document
+        const newUser = new User({
+          email: req.body.username,
+          password: hash
+
+          //============================================================   using md5   ============================================================
+          // using md5 hashing
+          // password: md5(req.body.password)
+          //============================================================
+        });
+
+        // save document to database
+        newUser.save((err) => {
+          //check if error log this error
+          if (err) {
+            console.log(err);
+            //else render secret page
+          } else {
+            res.render('secrets');
+          }
+        });
+
       }
     });
   });
-
 
 // ========================================== Login Route ========================================================//
 
@@ -101,7 +118,12 @@ app.route('/login')
   .post((req, res) => {
     //save username and Password to var
     const userName = req.body.username;
-    const password = md5(req.body.password);
+    const password = req.body.password;
+
+    //============================================================   using md5   ============================================================
+    // using md5 hashing
+    // const password = md5(req.body.password);
+    //============================================================
 
     //search for user name in DB
     User.findOne({
@@ -109,23 +131,30 @@ app.route('/login')
     }, (err, foundUser) => {
 
       if (!err) {
-        //check if it have the same Password
-        if (password === foundUser.password) {
-          //render the secret page
-          res.render('secrets');
-        } else {
-          alert('user name not exist');
-        }
+
+        bcrypt.compare(password, foundUser.password, function(err, result) {
+          // result == true
+          if(!err){
+            res.render('secrets');
+          }else{
+            console.log(err);
+          }
+        });
+        //============================================================   using md5   ============================================================
+        // //check if it have the same Password
+        // if (password === foundUser.password) {
+        //   //render the secret page
+        //   res.render('secrets');
+        // } else {
+        //   console.log('user name not exist');
+        // }
+      //========================================================================================================================
       } else {
         console.log(err);
       }
     });
 
   });
-
-
-
-
 
 app.listen(port, () => {
   console.log('server is working on port 3000');
